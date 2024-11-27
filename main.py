@@ -1,5 +1,3 @@
-import boto3
-
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -8,18 +6,21 @@ from kivy.uix.spinner import Spinner
 from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
-from kivy.utils import get_color_from_hex
 from botocore.exceptions import ClientError
 from resources import colors
+from resources import components
 from functions import *
+from kivy.uix.label import Label
+from kivy.clock import Clock
+
+import threading
 
 class AWSSentinalApp(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.aws_regions = []
         self.logs = []
-        self.aws_access_key = None
-        self.aws_secret_key = None
+        self.loading_popup = None
 
     def build(self):
         # Root layout
@@ -71,63 +72,126 @@ class AWSSentinalApp(App):
         root_layout.add_widget(logs_layout)
 
         # Fetch Logs Button
-        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=get_color_from_hex(colors.green))
+        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.RGBA_green)
         fetch_logs_button.bind(on_press=self.fetch_logs)
         root_layout.add_widget(fetch_logs_button)
 
         return root_layout
 
     def fetch_regions(self, instance):
-        """Fetch AWS regions and populate the spinner."""
-        session = aws.authenticate(self)
-        if not session:
+        """Start fetching AWS regions in a thread."""
+        access_key = self.access_key_input.text.strip()
+        secret_key = self.secret_key_input.text.strip()
+
+        if not access_key or not secret_key:
+            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
+            self.logs_label.color = colors.RGBA_red
             return
+
+        self.loading_popup = components.LoadingPopup(message="Fetching AWS regions...")
+        self.loading_popup.open()
+
+        threading.Thread(target=self._fetch_regions_thread , args=(access_key,secret_key)).start()
+
+    def _fetch_regions_thread(self,access_key,secret_key):
+        """Threaded method to fetch AWS regions."""
         try:
+            session = aws.authenticate(access_key, secret_key)
+            if not session:
+                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.RGBA_red))
+                return
+
             ec2 = session.client("ec2")
-            regions = ec2.describe_regions()["Regions"]
-            self.aws_regions = [region["RegionName"] for region in regions]
-            self.region_spinner.values = self.aws_regions
-            self.logs_label.text = "Regions fetched successfully!"
-            self.logs_label.color = colors.RGBA_green
+            regions = [region["RegionName"] for region in ec2.describe_regions()["Regions"]]
+
+            # Update UI with regions on the main thread
+            Clock.schedule_once(lambda dt: self._update_regions_ui(regions, True))
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
-            self.logs_label.text = f"Error fetching regions: {error_code} - {error_message}"
-            self.logs_label.color = colors.RGBA_red
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching regions: {error_code} - {error_message}", colors.RGBA_red))
         except Exception as e:
-            self.logs_label.text = f"Unexpected Error in fetching regions: {str(e)}"
-            self.logs_label.color = colors.RGBA_red
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.RGBA_red))
+        finally:
+            Clock.schedule_once(self.loading_popup.dismiss())
 
     def fetch_logs(self, instance):
-        """Fetch CloudTrail logs for the selected region."""
-        session = aws.authenticate(self)
-        if not session:
+        """Start fetching CloudTrail logs in a thread."""
+        access_key = self.access_key_input.text.strip()
+        secret_key = self.secret_key_input.text.strip()
+        if not access_key or not secret_key:
+            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
+            self.logs_label.color = colors.RGBA_red
             return
+
         selected_region = self.region_spinner.text
         if selected_region == "Select Region":
             self.logs_label.text = "Please select a region first!"
             self.logs_label.color = colors.RGBA_red
             return
+
+        self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
+        self.loading_popup.open()
+        threading.Thread(target=self._fetch_logs_thread, args=(selected_region,access_key,secret_key)).start()
+
+    def _fetch_logs_thread(self, selected_region,access_key,secret_key):
+        """Threaded method to fetch CloudTrail logs."""
         try:
+            session = aws.authenticate(access_key, secret_key)
+            if not session:
+                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.RGBA_red))
+                return
+
             client = session.client("cloudtrail", region_name=selected_region)
             paginator = client.get_paginator("lookup_events")
-            self.logs = []
+            logs = []
             for page in paginator.paginate():
-                self.logs.extend(page["Events"])
-            self.logs_container.clear_widgets()
-            for log in self.logs[:20]:
-                log_label = Label(text=f"Event: {log['EventName']}", size_hint_y=None, height=30)
-                self.logs_container.add_widget(log_label)
-            self.logs_label.text = f"Fetched {len(self.logs)} events!"
-            self.logs_label.color = colors.RGBA_green
+                logs.extend(page["Events"])
+
+            # Update UI with logs on the main thread
+            Clock.schedule_once(lambda dt: self._update_logs_ui(logs, True))
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
-            self.logs_label.text = f"Error fetching logs: {error_code} - {error_message}"
-            self.logs_label.color = colors.RGBA_red
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching logs: {error_code} - {error_message}", colors.RGBA_red))
         except Exception as e:
-            self.logs_label.text = f"Unexpected Error in fetching logs: {str(e)}"
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.RGBA_red))
+        finally:
+            Clock.schedule_once(self.loading_popup.dismiss())
+
+    def _update_regions_ui(self, regions, success):
+        """Update UI with fetched regions or error message."""
+        if success:
+            self.aws_regions = regions
+            self.region_spinner.values = self.aws_regions
+            self.logs_label.text = "Regions fetched successfully!"
+            self.logs_label.color = colors.RGBA_green
+        else:
+            self.logs_label.text = regions
             self.logs_label.color = colors.RGBA_red
+
+    def _update_logs_ui(self, logs, success):
+        """Update UI with fetched logs or error message."""
+        if success:
+            self.logs = logs
+            self.logs_container.clear_widgets()
+            for log in self.logs[:20]:
+                log_label = Label(
+                    text=f"Event: {log['EventName']}",
+                    size_hint_y=None,
+                    height=30,
+                )
+                self.logs_container.add_widget(log_label)
+            self.logs_label.text = f"Fetched {len(self.logs)} events!"
+            self.logs_label.color = colors.RGBA_green
+        else:
+            self.logs_label.text = logs
+            self.logs_label.color = colors.RGBA_red
+
+    def _update_logs_label(self, message, color):
+        """Update logs label with a message and color."""
+        self.logs_label.text = message
+        self.logs_label.color = color
 
 if __name__ == "__main__":
     AWSSentinalApp().run()
