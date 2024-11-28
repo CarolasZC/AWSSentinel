@@ -13,9 +13,12 @@ from functions import *
 from kivy.uix.label import Label
 from kivy.clock import Clock
 
+import datetime
+import json
 import threading
 
 class AWSSentinalApp(App):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.aws_regions = []
@@ -72,7 +75,7 @@ class AWSSentinalApp(App):
         root_layout.add_widget(logs_layout)
 
         # Fetch Logs Button
-        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.RGBA_green)
+        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.LimeGreen)
         fetch_logs_button.bind(on_press=self.fetch_logs)
         root_layout.add_widget(fetch_logs_button)
 
@@ -85,7 +88,7 @@ class AWSSentinalApp(App):
 
         if not access_key or not secret_key:
             self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
-            self.logs_label.color = colors.RGBA_red
+            self.logs_label.color = colors.Red
             return
 
         self.loading_popup = components.LoadingPopup(message="Fetching AWS regions...")
@@ -98,7 +101,7 @@ class AWSSentinalApp(App):
         try:
             session = aws.authenticate(access_key, secret_key)
             if not session:
-                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.RGBA_red))
+                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.Red))
                 return
 
             ec2 = session.client("ec2")
@@ -109,9 +112,9 @@ class AWSSentinalApp(App):
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
-            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching regions: {error_code} - {error_message}", colors.RGBA_red))
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching regions: {error_code} - {error_message}", colors.Red))
         except Exception as e:
-            Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.RGBA_red))
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.Red))
         finally:
             Clock.schedule_once(self.loading_popup.dismiss())
 
@@ -121,13 +124,13 @@ class AWSSentinalApp(App):
         secret_key = self.secret_key_input.text.strip()
         if not access_key or not secret_key:
             self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
-            self.logs_label.color = colors.RGBA_red
+            self.logs_label.color = colors.Red
             return
 
         selected_region = self.region_spinner.text
         if selected_region == "Select Region":
             self.logs_label.text = "Please select a region first!"
-            self.logs_label.color = colors.RGBA_red
+            self.logs_label.color = colors.Red
             return
 
         self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
@@ -136,26 +139,36 @@ class AWSSentinalApp(App):
 
     def _fetch_logs_thread(self, selected_region,access_key,secret_key):
         """Threaded method to fetch CloudTrail logs."""
+        end_time = datetime.datetime.now()
+        start_time = end_time - datetime.timedelta(days=7)
         try:
             session = aws.authenticate(access_key, secret_key)
             if not session:
-                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.RGBA_red))
+                Clock.schedule_once(lambda dt: self._update_logs_label("Authentication failed.", colors.Red))
                 return
 
             client = session.client("cloudtrail", region_name=selected_region)
             paginator = client.get_paginator("lookup_events")
             logs = []
-            for page in paginator.paginate():
-                logs.extend(page["Events"])
+            for page in paginator.paginate(
+                LookupAttributes=[
+            {
+                'AttributeKey': 'ReadOnly',
+                'AttributeValue': 'false'
+            },
+        ],
+        StartTime=start_time,EndTime=end_time):
+                 logs.extend(page["Events"])
 
             # Update UI with logs on the main thread
             Clock.schedule_once(lambda dt: self._update_logs_ui(logs, True))
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
-            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching logs: {error_code} - {error_message}", colors.RGBA_red))
+            Clock.schedule_once(lambda dt: self._update_logs_label(f"Error fetching logs: {error_code} - {error_message}", colors.Red))
         except Exception as e:
-            Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.RGBA_red))
+            error_message = f"Unexpected Error: {str(e)}"
+            Clock.schedule_once(lambda dt: self._update_logs_label(error_message, colors.Red))
         finally:
             Clock.schedule_once(self.loading_popup.dismiss())
 
@@ -165,10 +178,10 @@ class AWSSentinalApp(App):
             self.aws_regions = regions
             self.region_spinner.values = self.aws_regions
             self.logs_label.text = "Regions fetched successfully!"
-            self.logs_label.color = colors.RGBA_green
+            self.logs_label.color = colors.LimeGreen
         else:
             self.logs_label.text = regions
-            self.logs_label.color = colors.RGBA_red
+            self.logs_label.color = colors.Red
 
     def _update_logs_ui(self, logs, success):
         """Update UI with fetched logs or error message."""
@@ -177,16 +190,28 @@ class AWSSentinalApp(App):
             self.logs_container.clear_widgets()
             for log in self.logs[:20]:
                 log_label = Label(
-                    text=f"Event: {log['EventName']}",
+                    text=f"Event Name: {components.errorhandling.check_null(log,log.get('EventName','Unknown'),'Unknown')}",
+                    size_hint_y=None,
+                    height=30,
+                )
+                log_label2 = Label(
+                    text=f"Event Time: {components.errorhandling.check_null(log,log.get('EventTime','Unknown'),'Unknown')}",
+                    size_hint_y=None,
+                    height=30,
+                )
+                log_label3 = Label(
+                    text=f"Username: {components.errorhandling.check_null(log,log.get('Username','Unknown'),'Unknown')}",
                     size_hint_y=None,
                     height=30,
                 )
                 self.logs_container.add_widget(log_label)
+                self.logs_container.add_widget(log_label2)
+                self.logs_container.add_widget(log_label3)
             self.logs_label.text = f"Fetched {len(self.logs)} events!"
-            self.logs_label.color = colors.RGBA_green
+            self.logs_label.color = colors.LimeGreen
         else:
             self.logs_label.text = logs
-            self.logs_label.color = colors.RGBA_red
+            self.logs_label.color = colors.Red
 
     def _update_logs_label(self, message, color):
         """Update logs label with a message and color."""

@@ -2,11 +2,13 @@ from kivy.uix.popup import Popup
 from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
 
+from resources import colors
+
 class LoadingPopup:
     def __init__(self, title="Please Wait", message="Loading..."):
         """Initialize the LoadingPopup with a title and message."""
         self.content = BoxLayout(orientation="vertical", padding=10, spacing=10)
-        self.label = Label(text=message, font_size="18sp")
+        self.label = Label(color=colors.Yellow ,text=message, font_size="18sp")
         self.content.add_widget(self.label)
 
         self.popup = Popup(
@@ -27,4 +29,9 @@ class LoadingPopup:
     def update_message(self, message):
         """Update the popup message."""
         self.label.text = message
+
+class errorhandling:
+    def check_null(data,key,default=""):
+        value = data.get(key,default)
+        return value if value is not None else default
 
