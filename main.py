@@ -116,7 +116,7 @@ class AWSSentinalApp(App):
         except Exception as e:
             Clock.schedule_once(lambda dt: self._update_logs_label(f"Unexpected Error: {str(e)}", colors.Red))
         finally:
-            Clock.schedule_once(self.loading_popup.dismiss())
+            Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
     def fetch_logs(self, instance):
         """Start fetching CloudTrail logs in a thread."""
@@ -140,7 +140,7 @@ class AWSSentinalApp(App):
     def _fetch_logs_thread(self, selected_region,access_key,secret_key):
         """Threaded method to fetch CloudTrail logs."""
         end_time = datetime.datetime.now()
-        start_time = end_time - datetime.timedelta(days=7)
+        start_time = end_time - datetime.timedelta(days=30)
         try:
             session = aws.authenticate(access_key, secret_key)
             if not session:
@@ -159,7 +159,6 @@ class AWSSentinalApp(App):
         ],
         StartTime=start_time,EndTime=end_time):
                  logs.extend(page["Events"])
-
             # Update UI with logs on the main thread
             Clock.schedule_once(lambda dt: self._update_logs_ui(logs, True))
         except ClientError as e:
@@ -170,7 +169,7 @@ class AWSSentinalApp(App):
             error_message = f"Unexpected Error: {str(e)}"
             Clock.schedule_once(lambda dt: self._update_logs_label(error_message, colors.Red))
         finally:
-            Clock.schedule_once(self.loading_popup.dismiss())
+            Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
     def _update_regions_ui(self, regions, success):
         """Update UI with fetched regions or error message."""
@@ -188,25 +187,43 @@ class AWSSentinalApp(App):
         if success:
             self.logs = logs
             self.logs_container.clear_widgets()
+
             for log in self.logs[:20]:
-                log_label = Label(
-                    text=f"Event Name: {components.errorhandling.check_null(log,log.get('EventName','Unknown'),'Unknown')}",
+                # Extract top-level fields
+                event_name = log.get("EventName", "Unknown")
+                event_time = log.get("EventTime", "Unknown")
+                username = log.get("Username", "Unknown")
+                source_ip = log.get("sourceIPAddress", "Unknown")
+                
+                # Parse nested CloudTrailEvent JSON for additional details
+                cloudtrail_event = log.get("CloudTrailEvent")
+                if cloudtrail_event:
+                    try:
+                        event_details = json.loads(cloudtrail_event)  # Parse JSON string
+
+                        # Extract nested values
+                        event_time_format = event_details.get("eventTime", event_time)  
+                        source_ip = event_details.get("sourceIPAddress", source_ip)  
+                        user_identity = event_details.get("userIdentity", {})
+                        username = user_identity.get("userName", username)  
+                    except json.JSONDecodeError:
+                        print("Error parsing CloudTrailEvent JSON")
+
+                # Format the time for readability
+                if isinstance(event_time, datetime.datetime):
+                    event_time_format = str(event_time.strftime("%Y-%m-%d %H:%M:%S"))
+                # Create labels
+                log_label = components.DoubleClickableLabel(
+                    text=f"Event Name: {event_name}",
                     size_hint_y=None,
                     height=30,
                 )
-                log_label2 = Label(
-                    text=f"Event Time: {components.errorhandling.check_null(log,log.get('EventTime','Unknown'),'Unknown')}",
-                    size_hint_y=None,
-                    height=30,
+                log_label.on_double_press = lambda *args: log_label.open_trail_detail(
+                    event=event_name, time=event_time_format, username=username, ip=source_ip
                 )
-                log_label3 = Label(
-                    text=f"Username: {components.errorhandling.check_null(log,log.get('Username','Unknown'),'Unknown')}",
-                    size_hint_y=None,
-                    height=30,
-                )
+                # Add to container
                 self.logs_container.add_widget(log_label)
-                self.logs_container.add_widget(log_label2)
-                self.logs_container.add_widget(log_label3)
+
             self.logs_label.text = f"Fetched {len(self.logs)} events!"
             self.logs_label.color = colors.LimeGreen
         else:
