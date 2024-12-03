@@ -56,7 +56,7 @@ class DoubleClickableLabel(Label):
         layout = BoxLayout(orientation="vertical", padding=10, spacing=10)
         label = Label(
             text=f"Time: {time}\nUsername: {username}\nSource IP: {ip}",
-            font_size="18sp",
+            font_size="15sp",
             size_hint=(1, 0.8),
             color=colors.LimeGreen
         )
@@ -70,5 +70,5 @@ class DoubleClickableLabel(Label):
             size_hint=(0.6, 0.4),
             auto_dismiss=False,
         )
-        close_btn.bind(on_press=self.popup.dismiss)  # Bind the close button to dismiss the popup
+        close_btn.bind(on_press=self.popup.dismiss)
         self.popup.open()

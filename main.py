@@ -1,3 +1,6 @@
+import datetime
+import threading
+
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -7,15 +10,13 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from botocore.exceptions import ClientError
+from kivy.uix.label import Label
+from kivy.clock import Clock
+from kivy.uix.anchorlayout import AnchorLayout
+
 from resources import colors
 from resources import components
 from functions import *
-from kivy.uix.label import Label
-from kivy.clock import Clock
-
-import datetime
-import json
-import threading
 
 class AWSSentinalApp(App):
 
@@ -73,6 +74,16 @@ class AWSSentinalApp(App):
         scroll_view.add_widget(self.logs_container)
         logs_layout.add_widget(scroll_view)
         root_layout.add_widget(logs_layout)
+
+        # # Logs Previous and Next button Section
+        # buttons_layout = BoxLayout(orientation='horizontal',size_hint=(1, None), height=50, spacing=10, padding=(10, 10))
+        # previous_button = Button(text="Previous", size_hint=(None, 1), width=100)
+        # next_button = Button(text="Next", size_hint=(None, 1), width=100)
+        # buttons_anchor = AnchorLayout(anchor_x='right', anchor_y='bottom', size_hint=(1, None), height=60,)
+        # buttons_layout.add_widget(previous_button)
+        # buttons_layout.add_widget(next_button)
+        # buttons_anchor.add_widget(buttons_layout)
+        # root_layout.add_widget(buttons_anchor)
 
         # Fetch Logs Button
         fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.LimeGreen)
@@ -189,37 +200,15 @@ class AWSSentinalApp(App):
             self.logs_container.clear_widgets()
 
             for log in self.logs[:20]:
-                # Extract top-level fields
-                event_name = log.get("EventName", "Unknown")
-                event_time = log.get("EventTime", "Unknown")
-                username = log.get("Username", "Unknown")
-                source_ip = log.get("sourceIPAddress", "Unknown")
-                
-                # Parse nested CloudTrailEvent JSON for additional details
-                cloudtrail_event = log.get("CloudTrailEvent")
-                if cloudtrail_event:
-                    try:
-                        event_details = json.loads(cloudtrail_event)  # Parse JSON string
-
-                        # Extract nested values
-                        event_time_format = event_details.get("eventTime", event_time)  
-                        source_ip = event_details.get("sourceIPAddress", source_ip)  
-                        user_identity = event_details.get("userIdentity", {})
-                        username = user_identity.get("userName", username)  
-                    except json.JSONDecodeError:
-                        print("Error parsing CloudTrailEvent JSON")
-
-                # Format the time for readability
-                if isinstance(event_time, datetime.datetime):
-                    event_time_format = str(event_time.strftime("%Y-%m-%d %H:%M:%S"))
+                event_data = aws.parse_cloudtrail_event(log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
-                    text=f"Event Name: {event_name}",
+                    text=f"Event Name: {event_data['event_name']}",
                     size_hint_y=None,
                     height=30,
                 )
-                log_label.on_double_press = lambda *args: log_label.open_trail_detail(
-                    event=event_name, time=event_time_format, username=username, ip=source_ip
+                log_label.on_double_press = lambda *args, event=event_data: log_label.open_trail_detail(
+                    event=event['event_name'], time=event['event_time'], username=event['username'], ip=event['source_ip']
                 )
                 # Add to container
                 self.logs_container.add_widget(log_label)
