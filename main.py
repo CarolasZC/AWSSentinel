@@ -82,8 +82,8 @@ class AWSSentinalApp(App):
         # buttons_anchor = AnchorLayout(anchor_x='right', anchor_y='bottom', size_hint=(1, None), height=60,)
         # buttons_layout.add_widget(previous_button)
         # buttons_layout.add_widget(next_button)
-        # buttons_anchor.add_widget(buttons_layout)
-        # root_layout.add_widget(buttons_anchor)
+        # buttons_anchor.add_widget(buttons_layout)   
+        # logs_layout.add_widget(buttons_anchor)
 
         # Fetch Logs Button
         fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.LimeGreen)
@@ -199,8 +199,8 @@ class AWSSentinalApp(App):
             self.logs = logs
             self.logs_container.clear_widgets()
 
-            for log in self.logs[:20]:
-                event_data = aws.parse_cloudtrail_event(log)
+            for id,log in enumerate(self.logs):
+                event_data = aws.parse_cloudtrail_event(id,log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
                     text=f"Event Name: {event_data['event_name']}",
@@ -208,7 +208,7 @@ class AWSSentinalApp(App):
                     height=30,
                 )
                 log_label.on_double_press = lambda *args, event=event_data: log_label.open_trail_detail(
-                    event=event['event_name'], time=event['event_time'], username=event['username'], ip=event['source_ip']
+                    event=event['event_name'], time=event['event_time'], username=event['username'], ip=event['source_ip'],event_source=event['event_source']
                 )
                 # Add to container
                 self.logs_container.add_widget(log_label)

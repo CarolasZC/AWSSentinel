@@ -51,11 +51,11 @@ class DoubleClickableLabel(Label):
         """Override this method in instances to handle double-press events."""
         pass
 
-    def open_trail_detail(self, event, time, username, ip):
+    def open_trail_detail(self, event, time, username, ip, event_source):
         """Create a popup for displaying event details."""
         layout = BoxLayout(orientation="vertical", padding=10, spacing=10)
         label = Label(
-            text=f"Time: {time}\nUsername: {username}\nSource IP: {ip}",
+            text=f"Event Source: {event_source}\nTime: {time}\nUsername: {username}\nSource IP: {ip}",
             font_size="15sp",
             size_hint=(1, 0.8),
             color=colors.LimeGreen
