@@ -27,17 +27,13 @@ def parse_cloudtrail_event(id,event):
         
         # Parse nested CloudTrailEvent JSON
         cloudtrail_event = event.get("CloudTrailEvent")
+        username = event.get("Username",username)
+        event_time = event.get("EventTime",event_time)
         if cloudtrail_event:
             event_details = json.loads(cloudtrail_event)  # Parse JSON string
             event_name = event_details.get("eventName", event_name)
             event_source = event_details.get("eventSource", event_source)
-            event_time = event_details.get("eventTime", event_time)
             source_ip = event_details.get("sourceIPAddress", source_ip)
-            user_identity = event_details.get("userIdentity", {})
-            username = user_identity.get("userName", username)
-
-            if user_identity.get("type","") == "Root":
-                 username = "Root"
 
         return {
             "event_name": event_name,
@@ -56,3 +52,11 @@ def parse_cloudtrail_event(id,event):
             "username": "Unknown",
             "source_ip": "Unknown",
         }
+
+def filter_trail_by_event_name(logs,logs_model, text):
+    logs_model.clear()
+    if text != None or text != '':
+        logs_model = [log for log in logs if text.lower() in log.get('event_name', '').lower()]
+    else:
+         logs_model = logs
+    return logs_model

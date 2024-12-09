@@ -13,6 +13,7 @@ from botocore.exceptions import ClientError
 from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.anchorlayout import AnchorLayout
+from functools import partial
 
 from resources import colors
 from resources import components
@@ -24,14 +25,15 @@ class AWSSentinalApp(App):
         super().__init__(**kwargs)
         self.aws_regions = []
         self.logs = []
+        self.parse_cloudtrail_event = []
         self.loading_popup = None
 
     def build(self):
         # Root layout
-        root_layout = BoxLayout(orientation="vertical", padding=[10, 10], spacing=10)
+        root_layout = BoxLayout(orientation="vertical", padding=[10, 10], spacing=20)
 
         # Authentication Section
-        auth_layout = BoxLayout(orientation="vertical", size_hint=(1, None), spacing=5)
+        auth_layout = BoxLayout(orientation="vertical", size_hint=(1, None), spacing=10)
 
         # AWS Access Key
         key_box = BoxLayout(orientation="horizontal", size_hint=(1, None), height=40, spacing=5)
@@ -64,12 +66,18 @@ class AWSSentinalApp(App):
         root_layout.add_widget(region_layout)
 
         # Logs Section
-        logs_layout = BoxLayout(orientation="vertical", size_hint=(1, 0.6))
+        logs_layout = BoxLayout(orientation="vertical",spacing=5)
+        logs_label_with_filter_layout = BoxLayout(orientation="horizontal",size_hint=(1, None), height=30)
         self.logs_label = Label(text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True)
+        self.filter_event_input = TextInput(hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.4, 1))
+        self.filter_event_input.bind(on_text_validate=partial(lambda:aws.filter_trail_by_event_name(logs=self.logs, logs_model=self.logs__filter_models, text=self.filter_event_input.text)))
         self.logs_label.bind(size=self.logs_label.setter("text_size"))
-        logs_layout.add_widget(self.logs_label)
+        logs_label_with_filter_layout.add_widget(self.logs_label)
+        logs_label_with_filter_layout.add_widget(self.filter_event_input)
+        logs_layout.add_widget(logs_label_with_filter_layout)
+
         scroll_view = ScrollView(size_hint=(1, 1))
-        self.logs_container = GridLayout(cols=1, size_hint_y=None, spacing=10)
+        self.logs_container = GridLayout(cols=1, size_hint_y=None)
         self.logs_container.bind(minimum_height=self.logs_container.setter("height"))
         scroll_view.add_widget(self.logs_container)
         logs_layout.add_widget(scroll_view)
@@ -86,9 +94,14 @@ class AWSSentinalApp(App):
         # logs_layout.add_widget(buttons_anchor)
 
         # Fetch Logs Button
-        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(1, 0.1),color=colors.LimeGreen)
+        pagination_layout = BoxLayout(orientation="horizontal", size_hint=(1, None), height=50)
+        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(0.6, 0.5),color=colors.LimeGreen, padding=10)
+        self.export_logs_button = Spinner(text="Select Export Logs Type",values=['JSON','PDF'],size_hint=(0.6, 0.5),color=colors.LimeGreen, padding=10)
         fetch_logs_button.bind(on_press=self.fetch_logs)
-        root_layout.add_widget(fetch_logs_button)
+        self.export_logs_button.bind(on_press=lambda insatnce: self.export_type(logs=self.logs, format=self.export_logs_button.text))
+        pagination_layout.add_widget(fetch_logs_button)
+        pagination_layout.add_widget(self.export_logs_button)
+        root_layout.add_widget(pagination_layout)
 
         return root_layout
 
@@ -129,25 +142,6 @@ class AWSSentinalApp(App):
         finally:
             Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
-    def fetch_logs(self, instance):
-        """Start fetching CloudTrail logs in a thread."""
-        access_key = self.access_key_input.text.strip()
-        secret_key = self.secret_key_input.text.strip()
-        if not access_key or not secret_key:
-            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
-            self.logs_label.color = colors.Red
-            return
-
-        selected_region = self.region_spinner.text
-        if selected_region == "Select Region":
-            self.logs_label.text = "Please select a region first!"
-            self.logs_label.color = colors.Red
-            return
-
-        self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
-        self.loading_popup.open()
-        threading.Thread(target=self._fetch_logs_thread, args=(selected_region,access_key,secret_key)).start()
-
     def _fetch_logs_thread(self, selected_region,access_key,secret_key):
         """Threaded method to fetch CloudTrail logs."""
         end_time = datetime.datetime.now()
@@ -182,6 +176,25 @@ class AWSSentinalApp(App):
         finally:
             Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
+    def fetch_logs(self, instance):
+        """Start fetching CloudTrail logs in a thread."""
+        access_key = self.access_key_input.text.strip()
+        secret_key = self.secret_key_input.text.strip()
+        if not access_key or not secret_key:
+            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
+            self.logs_label.color = colors.Red
+            return
+
+        selected_region = self.region_spinner.text
+        if selected_region == "Select Region":
+            self.logs_label.text = "Please select a region first!"
+            self.logs_label.color = colors.Red
+            return
+
+        self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
+        self.loading_popup.open()
+        threading.Thread(target=self._fetch_logs_thread, args=(selected_region,access_key,secret_key)).start()
+
     def _update_regions_ui(self, regions, success):
         """Update UI with fetched regions or error message."""
         if success:
@@ -196,6 +209,7 @@ class AWSSentinalApp(App):
     def _update_logs_ui(self, logs, success):
         """Update UI with fetched logs or error message."""
         if success:
+
             self.logs = logs
             self.logs_container.clear_widgets()
 
@@ -203,9 +217,11 @@ class AWSSentinalApp(App):
                 event_data = aws.parse_cloudtrail_event(id,log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
-                    text=f"Event Name: {event_data['event_name']}",
+                    text=f"Event Name: {event_data['event_name']} | Time: {event_data['event_time']}",
                     size_hint_y=None,
+                    font_size="15dp",
                     height=30,
+                    padding= [0,5]
                 )
                 log_label.on_double_press = lambda *args, event=event_data: log_label.open_trail_detail(
                     event=event['event_name'], time=event['event_time'], username=event['username'], ip=event['source_ip'],event_source=event['event_source']
@@ -224,5 +240,27 @@ class AWSSentinalApp(App):
         self.logs_label.text = message
         self.logs_label.color = color
 
+    def export_type(self,logs,format):
+        if logs and logs !='':
+            self.loading_popup = components.LoadingPopup(message="Exporting event logs...")
+            self.loading_popup.open()
+
+            if format=="PDF":
+                function.Data.export_to_pdf(logs)
+                self.logs_label.text = "Logs successfully exported as PDF."
+                self.logs_label.color = colors.LimeGreen
+            elif format =="JSON":
+                function.Data.export_to_json(logs)
+                self.logs_label.text = "Logs successfully exported as JSON."
+                self.logs_label.color = colors.LimeGreen
+            else:
+                self.logs_label.text = "Error: Unsupported export type selected."
+                self.logs_label.color = colors.Red
+                
+            self.export_logs_button.text = "Select Export Logs Type" 
+            self.loading_popup.dismiss()
+        else:
+            self.logs_label.text = "Error: No logs are available."
+            self.logs_label.color = colors.Red
 if __name__ == "__main__":
     AWSSentinalApp().run()
