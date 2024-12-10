@@ -43,10 +43,11 @@ class Data:
         <html>
         <head>
             <style>
+            @page { size: landscape; }
                 body { font-family: Arial, sans-serif; }
                 h1 { text-align: center; }
                 table { table-layout: fixed; width: 100%; border-collapse: collapse; }
-                th, td { font-size: 9px ; word-wrap: break-word; overflow: hidden; border: 1px solid #ddd; padding: 8px; text-align: left; text-overflow: ellipsis; }
+                th, td {font-size: 8px ; word-wrap: break-word; overflow: hidden; border: 1px solid #ddd; padding: 5px; text-align: left; text-overflow: ellipsis; }
                 th { background-color: #f2f2f2; }   
             </style>
         </head>
@@ -56,6 +57,7 @@ class Data:
                 <thead>
                     <tr>
                         <th>Event Name</th>
+                        <th>Event Source</th>
                         <th>Event Time</th>
                         <th>User Name</th>
                         <th>IP Address</th>
@@ -76,6 +78,7 @@ class Data:
                 html_content += f"""
                     <tr>
                         <td>{event_details.get('eventName', 'Unknown')}</td>
+                        <td>{event_details.get('eventSource', 'Unknown')}</td>
                         <td>{event.get('EventTime', 'Unknown')}</td>
                         <td>{event.get("Username",'Unknown')}</td>
                         <td>{event_details.get('sourceIPAddress', 'Unknown')}</td>

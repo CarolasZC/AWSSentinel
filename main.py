@@ -27,6 +27,7 @@ class AWSSentinalApp(App):
         self.logs = []
         self.parse_cloudtrail_event = []
         self.loading_popup = None
+        self.selected_region =""
 
     def build(self):
         # Root layout
@@ -200,6 +201,7 @@ class AWSSentinalApp(App):
         if success:
             self.aws_regions = regions
             self.region_spinner.values = self.aws_regions
+            self.region_spinner.values = self.selected_region
             self.logs_label.text = "Regions fetched successfully!"
             self.logs_label.color = colors.LimeGreen
         else:
