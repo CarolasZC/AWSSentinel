@@ -14,6 +14,7 @@ from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.anchorlayout import AnchorLayout
 from functools import partial
+from kivy.core.window import Window
 
 from resources import colors
 from resources import components
@@ -27,11 +28,12 @@ class AWSSentinalApp(App):
         self.logs = []
         self.parse_cloudtrail_event = []
         self.loading_popup = None
-        self.selected_region =""
 
     def build(self):
+        Window.clearcolor=colors.DarkBlueGray
+
         # Root layout
-        root_layout = BoxLayout(orientation="vertical", padding=[10, 10], spacing=20)
+        root_layout = BoxLayout(orientation="vertical", padding=15, spacing=20)
 
         # Authentication Section
         auth_layout = BoxLayout(orientation="vertical", size_hint=(1, None), spacing=10)
@@ -60,6 +62,7 @@ class AWSSentinalApp(App):
         # Region Selection Section
         region_layout = BoxLayout(orientation="horizontal", size_hint=(1, 0.1), spacing=10)
         self.region_spinner = Spinner(text="Select Region", values=(), size_hint=(0.7, None), height=40)
+        self.region_spinner.bind(on_release=lambda instance: setattr(instance._dropdown, 'max_height', "200dp"))
         fetch_regions_button = Button(text="Fetch Regions", size_hint=(0.3, None), height=40)
         fetch_regions_button.bind(on_press=self.fetch_regions)
         region_layout.add_widget(self.region_spinner)
@@ -67,7 +70,7 @@ class AWSSentinalApp(App):
         root_layout.add_widget(region_layout)
 
         # Logs Section
-        logs_layout = BoxLayout(orientation="vertical",spacing=5)
+        logs_layout = BoxLayout(orientation="vertical", padding=[0,8], spacing=5)
         logs_label_with_filter_layout = BoxLayout(orientation="horizontal",size_hint=(1, None), height=30)
         self.logs_label = Label(text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True)
         self.filter_event_input = TextInput(hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.4, 1))
@@ -201,7 +204,6 @@ class AWSSentinalApp(App):
         if success:
             self.aws_regions = regions
             self.region_spinner.values = self.aws_regions
-            self.region_spinner.values = self.selected_region
             self.logs_label.text = "Regions fetched successfully!"
             self.logs_label.color = colors.LimeGreen
         else:
