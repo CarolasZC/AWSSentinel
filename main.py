@@ -26,7 +26,7 @@ class AWSSentinalApp(App):
         super().__init__(**kwargs)
         self.aws_regions = []
         self.logs = []
-        self.parse_cloudtrail_event = []
+        self.filtered_events = []
         self.loading_popup = None
 
     def build(self):
@@ -74,7 +74,7 @@ class AWSSentinalApp(App):
         logs_label_with_filter_layout = BoxLayout(orientation="horizontal",size_hint=(1, None), height=30)
         self.logs_label = Label(text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True)
         self.filter_event_input = TextInput(hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.4, 1))
-        self.filter_event_input.bind(on_text_validate=partial(lambda:aws.filter_trail_by_event_name(logs=self.logs, logs_model=self.logs__filter_models, text=self.filter_event_input.text)))
+        self.filter_event_input.bind()
         self.logs_label.bind(size=self.logs_label.setter("text_size"))
         logs_label_with_filter_layout.add_widget(self.logs_label)
         logs_label_with_filter_layout.add_widget(self.filter_event_input)
@@ -213,11 +213,13 @@ class AWSSentinalApp(App):
     def _update_logs_ui(self, logs, success):
         """Update UI with fetched logs or error message."""
         if success:
-
             self.logs = logs
+            self.filtered_events =[log for log in logs if self.filter_event_input.text in log.get('eventName', '')]
             self.logs_container.clear_widgets()
+            
+            enumerate_logs =(self.filtered_events if self.filter_event_input.text or self.filter_event_input.text !="" else self.logs)
 
-            for id,log in enumerate(self.logs):
+            for id,log in enumerate(enumerate_logs):
                 event_data = aws.parse_cloudtrail_event(id,log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
