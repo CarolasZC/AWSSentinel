@@ -13,7 +13,6 @@ from botocore.exceptions import ClientError
 from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.uix.anchorlayout import AnchorLayout
-from functools import partial
 from kivy.core.window import Window
 
 from resources import colors
@@ -28,29 +27,49 @@ class AWSSentinalApp(App):
         self.logs = []
         self.filtered_events = []
         self.loading_popup = None
+        self.current_page = 0 
+        self.logs_per_page = 10
 
     def build(self):
         Window.clearcolor=colors.DarkBlueGray
+        # Width , Height
+        Window.size = (800, 600)
 
         # Root layout
-        root_layout = BoxLayout(orientation="vertical", padding=15, spacing=20)
+        root_layout = BoxLayout(
+            orientation="vertical", padding=15, spacing=20
+        )
 
         # Authentication Section
-        auth_layout = BoxLayout(orientation="vertical", size_hint=(1, None), spacing=10)
+        auth_layout = BoxLayout(
+            orientation="vertical", size_hint=(1, None), spacing=10
+        )
 
         # AWS Access Key
-        key_box = BoxLayout(orientation="horizontal", size_hint=(1, None), height=40, spacing=5)
-        key_label = Label(text="AWS Access Key:", size_hint=(0.3, 1), halign="left", valign="middle")
+        key_box = BoxLayout(
+            orientation="horizontal", size_hint=(1, None), height=40, spacing=5
+        )
+        key_label = Label(
+            text="AWS Access Key:", size_hint=(0.3, 1), halign="left", valign="middle"
+        )
         key_label.bind(size=key_label.setter("text_size"))
-        self.access_key_input = TextInput(hint_text="Enter AWS Access Key", multiline=False, size_hint=(0.7, 1))
+        self.access_key_input = TextInput(
+            hint_text="Enter AWS Access Key", multiline=False, size_hint=(0.7, 1)
+        )
         key_box.add_widget(key_label)
         key_box.add_widget(self.access_key_input)
 
         # AWS Secret Key
-        secret_box = BoxLayout(orientation="horizontal", size_hint=(1, None), height=40, spacing=5)
-        secret_label = Label(text="AWS Secret Key:", size_hint=(0.3, 1), halign="left", valign="middle")
+        secret_box = BoxLayout(
+            orientation="horizontal", size_hint=(1, None), height=40, spacing=5
+        )
+        secret_label = Label(
+            text="AWS Secret Key:", size_hint=(0.3, 1), halign="left", valign="middle"
+        )
         secret_label.bind(size=secret_label.setter("text_size"))
-        self.secret_key_input = TextInput(hint_text="Enter AWS Secret Key", multiline=False, password=True, size_hint=(0.7, 1))
+        self.secret_key_input = TextInput(
+            hint_text="Enter AWS Secret Key", multiline=False, password=True, size_hint=(0.7, 1)
+        )
         secret_box.add_widget(secret_label)
         secret_box.add_widget(self.secret_key_input)
 
@@ -60,20 +79,36 @@ class AWSSentinalApp(App):
         root_layout.add_widget(auth_layout)
 
         # Region Selection Section
-        region_layout = BoxLayout(orientation="horizontal", size_hint=(1, 0.1), spacing=10)
-        self.region_spinner = Spinner(text="Select Region", values=(), size_hint=(0.7, None), height=40)
-        self.region_spinner.bind(on_release=lambda instance: setattr(instance._dropdown, 'max_height', "200dp"))
-        fetch_regions_button = Button(text="Fetch Regions", size_hint=(0.3, None), height=40)
+        region_layout = BoxLayout(
+            orientation="horizontal", size_hint=(1, 0.1), spacing=10
+        )
+        self.region_spinner = Spinner(
+            text="Select Region", values=(), size_hint=(0.7, None), height=40
+        )
+        self.region_spinner.bind(
+            on_release=lambda instance: setattr(instance._dropdown, 'max_height', "200dp")
+        )
+        fetch_regions_button = Button(
+            text="Fetch Regions", size_hint=(0.3, None), height=40
+        )
         fetch_regions_button.bind(on_press=self.fetch_regions)
         region_layout.add_widget(self.region_spinner)
         region_layout.add_widget(fetch_regions_button)
         root_layout.add_widget(region_layout)
 
         # Logs Section
-        logs_layout = BoxLayout(orientation="vertical", padding=[0,8], spacing=5)
-        logs_label_with_filter_layout = BoxLayout(orientation="horizontal",size_hint=(1, None), height=30)
-        self.logs_label = Label(text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True)
-        self.filter_event_input = TextInput(hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.4, 1))
+        logs_layout = components.ColoredBoxLayout(
+            bg_color=colors.LightGray, orientation="vertical", padding=10 , spacing=5
+        )
+        logs_label_with_filter_layout = BoxLayout(
+            orientation="horizontal",size_hint=(1, None), height=30
+        )
+        self.logs_label = Label(
+            text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True, padding=[10,0,0,0]
+        )
+        self.filter_event_input = TextInput(
+            hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.5, 1)
+        )
         self.filter_event_input.bind(on_text_validate=self.filter_logs)
         self.logs_label.bind(size=self.logs_label.setter("text_size"))
         logs_label_with_filter_layout.add_widget(self.logs_label)
@@ -81,28 +116,48 @@ class AWSSentinalApp(App):
         logs_layout.add_widget(logs_label_with_filter_layout)
 
         scroll_view = ScrollView(size_hint=(1, 1))
-        self.logs_container = GridLayout(cols=1, size_hint_y=None)
+        self.logs_container = GridLayout(
+            cols=1, size_hint_y=None
+        )
         self.logs_container.bind(minimum_height=self.logs_container.setter("height"))
         scroll_view.add_widget(self.logs_container)
         logs_layout.add_widget(scroll_view)
         root_layout.add_widget(logs_layout)
 
-        # # Logs Previous and Next button Section
-        # buttons_layout = BoxLayout(orientation='horizontal',size_hint=(1, None), height=50, spacing=10, padding=(10, 10))
-        # previous_button = Button(text="Previous", size_hint=(None, 1), width=100)
-        # next_button = Button(text="Next", size_hint=(None, 1), width=100)
-        # buttons_anchor = AnchorLayout(anchor_x='right', anchor_y='bottom', size_hint=(1, None), height=60,)
-        # buttons_layout.add_widget(previous_button)
-        # buttons_layout.add_widget(next_button)
-        # buttons_anchor.add_widget(buttons_layout)   
-        # logs_layout.add_widget(buttons_anchor)
+        # Logs Previous and Next button Section
+        buttons_layout = BoxLayout(
+            orientation='horizontal', spacing=10, size_hint=(None, None), height=40
+        )
+        self.previous_button = Button(
+            text="Previous", size_hint=(None, 1), width=100, disabled=True
+        )
+        self.next_button = Button(
+            text="Next", size_hint=(None, 1), width=100, disabled=False
+        )
+        self.previous_button.bind(on_press=self.go_to_previous_page)
+        self.next_button.bind(on_press=self.go_to_next_page)
+        buttons_layout.add_widget(self.previous_button)
+        buttons_layout.add_widget(self.next_button)
+        buttons_anchor = AnchorLayout(
+           anchor_x='right', anchor_y='bottom', size_hint=(0.85, None), height=60
+        )
+        buttons_anchor.add_widget(buttons_layout)
+        logs_layout.add_widget(buttons_anchor)
 
         # Fetch Logs Button
-        pagination_layout = BoxLayout(orientation="horizontal", size_hint=(1, None), height=50)
-        fetch_logs_button = Button(text="Fetch CloudTrail Logs",size_hint=(0.6, 0.5),color=colors.LimeGreen, padding=10)
-        self.export_logs_button = Spinner(text="Select Export Logs Type",values=['JSON','PDF'],size_hint=(0.6, 0.5),color=colors.LimeGreen, padding=10)
+        pagination_layout = BoxLayout(
+            orientation="horizontal", size_hint=(1, None), height=40
+        )
+        fetch_logs_button = Button(
+            text="Fetch CloudTrail Logs",size_hint=(0.6, 0.8),color=colors.LimeGreen, padding=10
+        )
+        self.export_logs_button = Spinner(
+            text="Select Export Logs Type",values=['JSON','PDF'],size_hint=(0.6, 0.8),color=colors.LimeGreen, padding=10
+        )
         fetch_logs_button.bind(on_press=self.fetch_logs)
-        self.export_logs_button.bind(on_press=lambda insatnce: self.export_type(logs=self.logs, format=self.export_logs_button.text))
+        self.export_logs_button.bind(on_press=lambda insatnce: self.export_type(
+            logs=self.logs, format=self.export_logs_button.text
+        ))
         pagination_layout.add_widget(fetch_logs_button)
         pagination_layout.add_widget(self.export_logs_button)
         root_layout.add_widget(pagination_layout)
@@ -146,6 +201,36 @@ class AWSSentinalApp(App):
         finally:
             Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
+    def _update_regions_ui(self, regions, success):
+        """Update UI with fetched regions or error message."""
+        if success:
+            self.aws_regions = regions
+            self.region_spinner.values = self.aws_regions
+            self.logs_label.text = "Regions fetched successfully!"
+            self.logs_label.color = colors.LimeGreen
+        else:
+            self.logs_label.text = regions
+            self.logs_label.color = colors.Red
+
+    def fetch_logs(self, instance):
+        """Start fetching CloudTrail logs in a thread."""
+        access_key = self.access_key_input.text.strip()
+        secret_key = self.secret_key_input.text.strip()
+        if not access_key or not secret_key:
+            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
+            self.logs_label.color = colors.Red
+            return
+
+        selected_region = self.region_spinner.text
+        if selected_region == "Select Region":
+            self.logs_label.text = "Please select a region first!"
+            self.logs_label.color = colors.Red
+            return
+
+        self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
+        self.loading_popup.open()
+        threading.Thread(target=self._fetch_logs_thread, args=(selected_region,access_key,secret_key)).start()
+
     def _fetch_logs_thread(self, selected_region,access_key,secret_key):
         """Threaded method to fetch CloudTrail logs."""
         end_time = datetime.datetime.now()
@@ -169,7 +254,7 @@ class AWSSentinalApp(App):
         StartTime=start_time,EndTime=end_time):
                  logs.extend(page["Events"])
             # Update UI with logs on the main thread
-            Clock.schedule_once(lambda dt: self._update_logs_ui(logs, True))
+            Clock.schedule_once(lambda dt: self._update_logs_ui(logs, True,self.current_page))
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
             error_message = e.response["Error"]["Message"]
@@ -180,45 +265,18 @@ class AWSSentinalApp(App):
         finally:
             Clock.schedule_once(lambda dt:self.loading_popup.dismiss())
 
-    def fetch_logs(self, instance):
-        """Start fetching CloudTrail logs in a thread."""
-        access_key = self.access_key_input.text.strip()
-        secret_key = self.secret_key_input.text.strip()
-        if not access_key or not secret_key:
-            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
-            self.logs_label.color = colors.Red
-            return
-
-        selected_region = self.region_spinner.text
-        if selected_region == "Select Region":
-            self.logs_label.text = "Please select a region first!"
-            self.logs_label.color = colors.Red
-            return
-
-        self.loading_popup = components.LoadingPopup("Fetching CloudTrail logs...")
-        self.loading_popup.open()
-        threading.Thread(target=self._fetch_logs_thread, args=(selected_region,access_key,secret_key)).start()
-
-    def _update_regions_ui(self, regions, success):
-        """Update UI with fetched regions or error message."""
-        if success:
-            self.aws_regions = regions
-            self.region_spinner.values = self.aws_regions
-            self.logs_label.text = "Regions fetched successfully!"
-            self.logs_label.color = colors.LimeGreen
-        else:
-            self.logs_label.text = regions
-            self.logs_label.color = colors.Red
-
-    def _update_logs_ui(self, logs, success):
+    def _update_logs_ui(self, logs, success,start_index):
         """Update UI with fetched logs or error message."""
         if success:
             self.logs = logs
             self.logs_container.clear_widgets()
 
             logs_to_display = self.filtered_events if self.filtered_events else self.logs
+            start_index = self.current_page * self.logs_per_page
+            end_index = start_index + self.logs_per_page
+            paginated_logs = logs_to_display[start_index:end_index]
 
-            for id,log in enumerate(logs_to_display):
+            for id,log in enumerate(paginated_logs, start=start_index):
                 event_data = aws.parse_cloudtrail_event(id=id, event=log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
@@ -234,12 +292,16 @@ class AWSSentinalApp(App):
                 # Add to container
                 self.logs_container.add_widget(log_label)
 
-            self.logs_label.text = f"Fetched {len(logs_to_display)} events!"
+            total_pages = (len(logs_to_display) - 1) // self.logs_per_page + 1
+            self.logs_label.text = f"Fetched {len(logs_to_display)} events! Page: {self.current_page + 1}/{total_pages}"
             self.logs_label.color = colors.LimeGreen
+
+            self.previous_button.disabled = self.current_page == 0
+            self.next_button.disabled = self.current_page + 1 >= total_pages
         else:
             self.logs_label.text = logs
             self.logs_label.color = colors.Red
-
+            
     def _update_logs_label(self, message, color):
         """Update logs label with a message and color."""
         self.logs_label.text = message
@@ -276,6 +338,20 @@ class AWSSentinalApp(App):
         else:
             self.filtered_events =aws.filter_trail_by_event_name(self.logs, input_text)
             self._update_logs_ui(logs=self.filtered_events, success=True)      
-        
+    
+    def go_to_previous_page(self, instance):
+        logs_to_display = self.filtered_events if self.filtered_events else self.logs
+        if self.current_page > 0:
+            self.current_page -= 1
+            self._update_logs_ui(logs=logs_to_display,success=True,start_index=self.current_page)
+
+    def go_to_next_page(self, instance):
+        logs_to_display = self.filtered_events if self.filtered_events else self.logs
+        total_pages = (len(logs_to_display) - 1) // self.logs_per_page + 1
+
+        if self.current_page + 1 < total_pages:
+            self.current_page += 1
+            self._update_logs_ui(logs=logs_to_display,success=True,start_index=self.current_page)
+            
 if __name__ == "__main__":
     AWSSentinalApp().run()

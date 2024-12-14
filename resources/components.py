@@ -3,6 +3,7 @@ from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
 from kivy.properties import ObjectProperty
 from kivy.uix.button import Button
+from kivy.graphics import Color, Rectangle
 
 from resources import colors
 
@@ -72,3 +73,25 @@ class DoubleClickableLabel(Label):
         )
         close_btn.bind(on_press=self.popup.dismiss)
         self.popup.open()
+
+class ColoredBoxLayout(BoxLayout):
+    def __init__(self, bg_color=(1, 1, 1, 1), **kwargs):
+        """
+        A reusable BoxLayout with a customizable background color.
+        :param bg_color: Tuple representing the RGBA background color (default: white).
+        """
+        super().__init__(**kwargs)
+        self.bg_color = bg_color
+
+        # Add the background color and rectangle to the canvas
+        with self.canvas.before:
+            Color(*self.bg_color)  # Background color
+            self.rect = Rectangle(size=self.size, pos=self.pos)
+
+        # Bind to size and position changes
+        self.bind(size=self._update_rect, pos=self._update_rect)
+
+    def _update_rect(self, *args):
+        """Update the rectangle's size and position."""
+        self.rect.size = self.size
+        self.rect.pos = self.pos 
