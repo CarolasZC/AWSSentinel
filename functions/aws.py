@@ -53,12 +53,6 @@ def parse_cloudtrail_event(id,event):
             "source_ip": "Unknown",
         }
 
-def filter_trail_by_event_name(logs,logs_model, text):
-    logs_model.clear()
-
-    if text != None or text != '':
-        logs_model = [log for log in logs if text.lower() in log.get('event_name', '').lower()]
-    else:
-         logs_model = logs
-
-    return logs_model
+def filter_trail_by_event_name(logs, text):
+    filtered_logs = [log for id,log in enumerate(logs) if text.lower() in log.get('EventName', '').lower()]
+    return filtered_logs

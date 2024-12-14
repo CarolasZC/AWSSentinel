@@ -74,7 +74,7 @@ class AWSSentinalApp(App):
         logs_label_with_filter_layout = BoxLayout(orientation="horizontal",size_hint=(1, None), height=30)
         self.logs_label = Label(text="CloudTrail Logs:",size_hint=(1, None), height=30, halign="left", valign="middle", bold=True)
         self.filter_event_input = TextInput(hint_text="Filter Event Log By Event Name", multiline=False, size_hint=(0.4, 1))
-        self.filter_event_input.bind()
+        self.filter_event_input.bind(on_text_validate=self.filter_logs)
         self.logs_label.bind(size=self.logs_label.setter("text_size"))
         logs_label_with_filter_layout.add_widget(self.logs_label)
         logs_label_with_filter_layout.add_widget(self.filter_event_input)
@@ -214,13 +214,12 @@ class AWSSentinalApp(App):
         """Update UI with fetched logs or error message."""
         if success:
             self.logs = logs
-            self.filtered_events =[log for log in logs if self.filter_event_input.text in log.get('eventName', '')]
             self.logs_container.clear_widgets()
-            
-            enumerate_logs =(self.filtered_events if self.filter_event_input.text or self.filter_event_input.text !="" else self.logs)
 
-            for id,log in enumerate(enumerate_logs):
-                event_data = aws.parse_cloudtrail_event(id,log)
+            logs_to_display = self.filtered_events if self.filtered_events else self.logs
+
+            for id,log in enumerate(logs_to_display):
+                event_data = aws.parse_cloudtrail_event(id=id, event=log)
                 # Create labels
                 log_label = components.DoubleClickableLabel(
                     text=f"Event Name: {event_data['event_name']} | Time: {event_data['event_time']}",
@@ -235,7 +234,7 @@ class AWSSentinalApp(App):
                 # Add to container
                 self.logs_container.add_widget(log_label)
 
-            self.logs_label.text = f"Fetched {len(self.logs)} events!"
+            self.logs_label.text = f"Fetched {len(logs_to_display)} events!"
             self.logs_label.color = colors.LimeGreen
         else:
             self.logs_label.text = logs
@@ -268,5 +267,15 @@ class AWSSentinalApp(App):
         else:
             self.logs_label.text = "Error: No logs are available."
             self.logs_label.color = colors.Red
+
+    def filter_logs(self,instance):
+        input_text = instance.text.strip()
+        if not input_text:
+            self.filtered_events = []
+            self._fetch_logs_thread(selected_region=self.region_spinner.text,access_key=self.access_key_input.text,secret_key=self.secret_key_input.text)
+        else:
+            self.filtered_events =aws.filter_trail_by_event_name(self.logs, input_text)
+            self._update_logs_ui(logs=self.filtered_events, success=True)      
+        
 if __name__ == "__main__":
     AWSSentinalApp().run()
