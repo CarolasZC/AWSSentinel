@@ -337,7 +337,7 @@ class AWSSentinalApp(App):
             self._fetch_logs_thread(selected_region=self.region_spinner.text,access_key=self.access_key_input.text,secret_key=self.secret_key_input.text)
         else:
             self.filtered_events =aws.filter_trail_by_event_name(self.logs, input_text)
-            self._update_logs_ui(logs=self.filtered_events, success=True)      
+            self._update_logs_ui(logs=self.filtered_events, success=True,start_index=self.current_page)      
     
     def go_to_previous_page(self, instance):
         logs_to_display = self.filtered_events if self.filtered_events else self.logs
