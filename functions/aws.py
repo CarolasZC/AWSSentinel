@@ -1,24 +1,58 @@
 import boto3
+import json
 
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 
-from resources import colors
-
-def authenticate(self):
+def authenticate(access,secret):
         """Authenticate using AWS credentials."""
-        self.aws_access_key = self.access_key_input.text.strip()
-        self.aws_secret_key = self.secret_key_input.text.strip()
-        if not self.aws_access_key or not self.aws_secret_key:
-            self.logs_label.text = "Error: Please provide both AWS Access Key and Secret Key."
-            self.logs_label.color = colors.RGBA_red
-            return None
         try:
             session = boto3.session.Session(
-                aws_access_key_id=self.aws_access_key,
-                aws_secret_access_key=self.aws_secret_key,
+                aws_access_key_id=access,
+                aws_secret_access_key=secret,
+                region_name="us-east-1"
             )
             return session
         except (NoCredentialsError, PartialCredentialsError) as e:
-            self.logs_label.text = f"Authentication failed: {e}"
-            self.logs_label.color = colors.RGBA_red
             return None
+        
+def parse_cloudtrail_event(id,event):
+    """Parse a CloudTrail event and extract key details."""
+    try:
+        # Extract top-level fields
+        event_name = ""
+        event_source = ""
+        event_time = ""
+        username = ""
+        source_ip = ""
+        
+        # Parse nested CloudTrailEvent JSON
+        cloudtrail_event = event.get("CloudTrailEvent")
+        username = event.get("Username",username)
+        event_time = event.get("EventTime",event_time)
+        if cloudtrail_event:
+            event_details = json.loads(cloudtrail_event)  # Parse JSON string
+            event_name = event_details.get("eventName", event_name)
+            event_source = event_details.get("eventSource", event_source)
+            source_ip = event_details.get("sourceIPAddress", source_ip)
+
+        return {
+            "event_name": event_name,
+            "event_source": event_source,
+            "event_time": event_time,
+            "username": username,
+            "source_ip": source_ip,
+        }
+
+    except json.JSONDecodeError:
+        print("Error parsing CloudTrailEvent JSON")
+        return {
+            "event_name": "Unknown",
+            "event_source": "Unknown",
+            "event_time": "Unknown",
+            "username": "Unknown",
+            "source_ip": "Unknown",
+        }
+
+def filter_trail_by_event_name(logs, text):
+    filtered_logs = [log for id,log in enumerate(logs) if text.lower() in log.get('EventName', '').lower()]
+    return filtered_logs
