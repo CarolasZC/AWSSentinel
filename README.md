@@ -35,15 +35,15 @@ Install required python packages
 
 Log Overview and Paginated Navigation
 
-    ![Screenshot of image_original](https://github.com/CarolasZC/AWSSentinel/blob/dev/images/image_original.jpeg)
+    ![Screenshot of image_original](https://github.com/CarolasZC/AWSSentinel/blob/master/images/image_original.jpeg)
 
 Filter Logs by Event Name
 
-    ![Screenshot of image_original3](https://github.com/CarolasZC/AWSSentinel/blob/dev/images/image_original3.jpeg)
+    ![Screenshot of image_original3](https://github.com/CarolasZC/AWSSentinel/blob/master/images/image_original3.jpeg)
 
 Detailed Event View
 
-    ![Screenshot of image_original2](https://github.com/CarolasZC/AWSSentinel/blob/dev/images/image_original2.jpeg)
+    ![Screenshot of image_original2](https://github.com/CarolasZC/AWSSentinel/blob/master/images/image_original2.jpeg)
 
 
 # 🚀 Future Enhancements
