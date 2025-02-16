@@ -49,8 +49,9 @@ Detailed Event View
 # 🚀 Future Enhancements
    - 🌟 Add multi-region log fetching.
    - 📊 Support for advanced log analytics and visualization.
-   - 🔒 Integrate IAM role-based authentication.
-
+     
+> [!NOTE]
+> Second version of `AWS Sentinel - CloudTrail Log Viewer` has been implemented, contact me if interested
 
 # 🚀 How to Use
 1. Provide AWS Access Key and Secret Key:
